@@ -1,0 +1,8 @@
+Both the CLI and generated project have dependencies that require Node 6.9.0 or higher, together with NPM 3 or higher.
+
+nodejs
+
+python27
+
+npm -g install @angular/cli
+
