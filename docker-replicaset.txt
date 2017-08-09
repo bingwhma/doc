@@ -1,0 +1,74 @@
+
+
+docker run -d --expose 27017 --name mongodbmycompany1 dockerfile/mongodb mongod --replSet rsmycompa
+docker run -d --expose  27017 --name mongodbmycompany2 dockerfile/mongodb mongod --replSet rsacommeassure
+docker run -d --expose 27017 --name mongodbmycompany3 dockerfile/mongodb mongod --replSet rsacommeassure
+
+MONGODB1=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' mongodbmycompany1)
+MONGODB2=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' mongodbmycompany2)
+MONGODB3=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' mongodbmycompany3)
+
+echo $MONGODB1
+echo $MONGODB2
+echo $MONGODB3
+
+echo "Mongodb Replicaset init"
+docker exec mongodbmycompany1 mongo 127.0.0.1:27017/mycompany --eval 'if(!rs.conf()) { rs.initiate(); cfg = rs.conf(); cfg.members[0].host = "'$MONGODB1':27017"; rs.reconfig(cfg); rs.add("'$MONGODB2':27017"); rs.add("'$MONGODB3':27017"); } rs.status();'
+
+
+
+shard
+
+片键的选择至关重要，后面会进行详细的说明。
+这时再切换到config库如下查看
+mongos> use config
+mongos> db.databases.find()
+{ "_id" : "admin", "partitioned" : false, "primary" : "config" }
+{ "_id" : "OSSP10", "partitioned" : false, "primary" : "shard0000" }
+{ "_id" : "test", "partitioned" : true, "primary" : "shard0000" }
+{ "_id" : "test2", "partitioned" : false, "primary" : "shard0000" }
+{ "_id" : "test3", "partitioned" : false, "primary" : "shard0001" }
+mongos> db.chunks.find()
+{ "_id" : "test.user-_id_MinKey", "lastmod" : { "t" : 1, "i" : 0 }, "lastmodEpoch" : ObjectId("515a3797d249863e35f0e3fe"), "ns" : "test.user", "min" : { "_id" : { "$minKey" : 1 } }, "max" : { "_id" : { "$maxKey" : 1 } }, "shard" : "shard0000" }
+
+Chunks：理解MongoDB分片机制的关键是理解Chunks。mongodb不是一个分片上存储一个区间，而是每个分片包含多个区间，这每个区间就是一个块。
+mongos> use config
+mongos> db.settings.find()
+{ "_id" : "chunksize", "value" : 64 }
+
+注意：这里使用Uid作为片键通常是有问题的，2.3对递增片键有详细说明。
+Note:通过sh.status()可以很直观的查看当前整个集群的分片情况，类似如下：
+
+
+>sh.enableSharding("test")  
+
+
+
+在启用分片之前，先在希望作为片键的键上创建索引：
+>db.users.ensureIndex({"username" : 1})  
+现在就可以依据“username”对集合分片了：
+>sh.shardCollection（“test.users” , "username" : 1）  
+几分钟之后，再次运行sh.status()，可以看到，这次的输出信息比较多：
+
+
+
+
+
+
+mongos> sh.help()  
+    sh.addShard( host )                       server:port OR setname/server:port  
+    sh.enableSharding(dbname)                 enables sharding on the database dbname  
+    sh.shardCollection(fullName,key,unique)   shards the collection  
+    sh.splitFind(fullName,find)               splits the chunk that find is in at the median  
+    sh.splitAt(fullName,middle)               splits the chunk that middle is in at middle  
+    sh.moveChunk(fullName,find,to)            move the chunk where 'find' is to 'to' (name of shard)  
+    sh.setBalancerState( <bool on or not> )   turns the balancer on or off true=on, false=off  
+    sh.getBalancerState()                     return true if enabled  
+    sh.isBalancerRunning()                    return true if the balancer has work in progress on any mongos  
+    sh.disableBalancing(coll)                 disable balancing on one collection  
+    sh.enableBalancing(coll)                  re-enable balancing on one collection  
+    sh.addShardTag(shard,tag)                 adds the tag to the shard  
+    sh.removeShardTag(shard,tag)              removes the tag from the shard  
+    sh.addTagRange(fullName,min,max,tag)      tags the specified range of the given collection  
+    sh.removeTagRange(fullName,min,max,tag)   removes the tagged range of the given collection  
+    sh.status()                               prints a general overview of the cluster  

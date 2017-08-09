@@ -1,0 +1,238 @@
+Dockerfile 最佳实践
+Dockerfile 最佳实践
+
+本文由Vikings(http://www.cnblogs.com/vikings-blog/) 原创，转载请标明.谢谢！
+
+　　写在前面的话
+
+　　如果要研究和使用Docker，那么一定要使用Dockerfile来build自己的image。但docker的原理限定了image的layer不能太多，因此不能肆意妄为的进行build，一定要控制image的layer数量。同样也要关注image的大小，
+如果build出来的image动辄就是7,8GB，那么实用性就很差了。因此在参考官方的Dockerfile Best Practices之后，结合本人平时的经验写出下面的文章。
+
+Overview
+　　Docker通过读取Dockerfile里面的内容自动build image。Dockerfile是一个包含了build过程中需要执行的所有命令的文本文件。Dockerfile有特定的数据格式，关于Dockerfile的基础可以参考 Dockerfile Reference ，如果您对Dockerfile还没有感觉，建议从Reference开始。
+
+　　这篇文档包含了Docker推荐的最佳实践，Docker官方建议您按照以下规则编写Dockerfile。事实上，如果您准备build一个官方版本的image，那么有一些规则，是必须遵守的。
+　　如果您在查看以下内容时，需要深入理解某些命令的使用方法，建议查看Dockerfile Reference。
+
+
+General guidelines and recommendations
+
+　
+Containers should be ephemeral 
+
+　　这些通过您的Dockerfile所构建的image而产生的container，越精简越好(ephemeral 意为短暂，我认为这里翻译为精简较为合适)。这个"精简"，我们的意思是：这个container可以很容易的stop或者destroy，也很容易的build出一个新的container，同时通过很少的步骤或者配置就可以部署使用。
+
+Use a .dockerignore file
+
+　　如果想要快速的进行upload，或者想要提高docker build的效率。那么建议你使用 .dockerignore 文件。例如：除非在build过程中需要.git文件，否则你应该将.git添加到.dockerignore中，这将减少最终image的大小也会提高upload的效率。
+
+Avoid installing unnecessary packages
+
+　　为了减少build复杂度，软件依赖度，image尺寸和build时间，你应该尽量回避那些非必要安装的软件包，因为这些软件包仅属于锦上添花那一列，非必须那一列。比如：你就没有必要在Database image中安装一个文本编辑器。
+
+Run only one process per container
+
+　　在几乎所有的case里面，就尽量是一个container只运行一个单独的实例。将具有耦合度的application分别安装到不同的container里面，将很容易进行横向扩展和复用container。如果某个service依赖其他service，推荐使用container linking 技术。
+
+
+Minimize the number of layers
+
+　　在Dockerfile可读性和保持最少数据层之间找到平衡。一定要慎重引入新的数据层。
+
+Sort multi-line arguments
+
+　　如果可能的话，将你准备安装的软件包安装字母顺序排列。这样可以回避重复安装软件包的情况，同时也有助于进行软件更新。通过添加"\"进行分割，将增强代码的可读性。
+
+　　下面列出了在build-deps中的一段代码：
+
+复制代码
+RUN apt-get update && apt-get install -y \
+  bzr \
+  cvs \
+  git \
+  mercurial \
+  subversion
+复制代码
+ 
+
+Build cache
+
+　　Docker在build image过程中，会按照Dockerfile中规定的步骤依次执行。Docker当执行每一条命令时都会查找有没有已存在的数据层或者可以服用的数据层，而不是每次都是傻傻的重新执行。当然如果你不想使用cache中的数据层，那么在执行docker build时添加 --no-cache=true即可。
+
+　　如果你准备使用cache中的数据层，那么有必要了解一下docker什么时候会使用，什么时候不会使用这些数据层。以下是Docker的规则：
+
+如果cache中存在baseimage，那么递归检查Dockerfile中所有的数据层定义是否和cache中的baseimage数据层定义相同。如果不相同，则cache数据无效
+在大多数情况下，将Dockerfile中的指令同cache中的image 数据层比对就足够了。但某一些命令需要每次都执行。
+针对ADD COPY这些命令，docker会检查这些文件。每次都会计算这些文件的checksum。如果checksum同cache中的checksum不匹配，那么这些cacha中的文件将会失效。
+除了ADD COPY这两个命令，Docker会检查cache中有没有匹配的数据，其他的命令Docker都不会匹配cache中的数据。比如当执行RUN apt-get -y update命令时，Docker不会检查cache中是否有update后的数据，而仅仅是在cache中查找有没有匹配的命令字符串而已。 
+　　一旦cache中的数据无效了，那么这条命令以后的所有命令都不会使用cache中的数据，而是产生一个新的数据层。
+
+ 
+
+The Dockerfile instructions
+
+　　下面是定义Dockerfile的一些建议。
+
+　　FROM
+
+　　如果有可能，建议使用官方提供的image版本作为你的baseimage。我们建议使用Debian image，因为这些image易于控制同时尺寸都很小，大多数在100MB以下，非常适合进行分发。
+
+　　RUN
+
+　　为了保持你的Dockerfile可读性，易于理解，方便维护。建议将多条RUN 命令使用"/"连接起来。
+
+　　apt-get应该是大多数Dockerfile都会定义的RUN 命令。当使用apt-get，有如下建议可参考：
+
+不用将RUN apt-get update单独作为一条命令。如果关联包发生变化后，在执行apt-get install 命令时，docker 查找cache时有可能会有问题。
+回避使用 RUN apt-get upgrade 或者 dis-upgrade 命令。因为很多外部的软件包在未经认证情况执行upgrade会失败。如果有一些软件包过期了，那么你应该联系软件包的维护者来确定是否需要升级。比如你确定一个第三方的软件包 foo 可以进行升级。那么执行apt-get install -y foo就可以自动完成升级。
+可以写成如下格式：
+RUN apt-get update && apt-get install -y package-bar package-foo package-baz
+ 
+
+　　下面是一个包含了上述建议的使用RUN命令的例子。注意最后一个软件包 s3cmd 特定了版本1.1.0*。 如果image中安装的是旧版本的s3cmd，那么这条命令将会更新cache中的数据。
+
+　　
+
+复制代码
+RUN apt-get update && apt-get install -y \
+    aufs-tools \
+    automake \
+    btrfs-tools \
+    build-essential \
+    curl \
+    dpkg-sig \
+    git \
+    iptables \
+    libapparmor-dev \
+    libcap-dev \
+    libsqlite3-dev \
+    lxc=1.0* \
+    mercurial \
+    parallel \
+    reprepro \
+    ruby1.9.1 \
+    ruby1.9.1-dev \
+    s3cmd=1.1.0*
+复制代码
+　　按照这个规范定义RUN命令，将使你回避到重复安装软件包的情况。因为下面的格式太难维护了。
+
+RUN apt-get install -y package-foo && apt-get install -y package-bar
+　　
+
+　　CMD
+
+　　CMD命令用来执行image中的所有应用。CMD一般采用CMD [“executable”, “param1”, “param2”…]的格式来运行。所以，如果你的image是用来提供服务的，例如Apache，Rails。你就应该执行类似这样的命令CMD ["apache2","-DFOREGROUND"]。
+
+　　在其他的case中，CMD用来执行特定的shell,比如：bash,python,perl等等。比如：CMD ["perl", "-de0"], CMD ["python"], or CMD [“php”, “-a”]。
+
+　　当你执行docker run -it python时就可以进入特定的shell中。
+
+　　CMD经常是配合ENTRYPOINT 来使用的。除非确定你的用户非常了解ENTRYPOINT 的特性。否则还是建议你事先设定好ENTRYPOINT
+
+ 
+
+　　EXPOSE
+
+　　EXPOSE命令定义了container用来监听连接者的端口。因此，你应该为你的image定义一个比较通用的端口。比如一个用来提供Apache web服务的image，你应该expose 80.而提供MongoDB的image，应该提供27017端口。
+
+　　对于一些外部访问，你的用户可以使用docker run -p的形式来进行端口绑定。
+
+ 
+
+　　ENV
+
+　　为了保证application可以顺利执行，你可以通过ENV来更新PATH环境变量。比如：通过ENV PATH /usr/local/nginx/bin:$PATH 可以确保CMD ["nginx"]顺利执行。
+
+　　ENV也可以用来提供特定的环境变量，比如你可以自定义postgres所需要的PGDATA变量。
+
+　　最后ENV可以用来定义一些版本信息。这样维护起来就更容易，比如下例：
+
+ENV PG_MAJOR 9.3
+ENV PG_VERSION 9.3.4
+RUN curl -SL http://example.com/postgres-$PG_VERSION.tar.xz | tar -xJC /usr/src/postgress && …
+ENV PATH /usr/local/postgres-$PG_MAJOR/bin:$PATH
+　　ADD和COPY
+
+　　尽管ADD和COPY用法和作用很相近，但COPY仍是首选建议。因为COPY相对于ADD而言，功能简单够用。COPY仅提供本地文件向container的基本拷贝功能。但ADD就有额外的一些功能，比如支持拷贝tar包和URL。因此，ADD比较符合逻辑的使用方式是 ADD roots.tar.gz / 。
+
+　　如果在你的Dockerfile中每步之间需要使用不用的文件，那么建议使用COPY 一些文件而不是COPY所有文件。比如：
+
+COPY requirements.txt /tmp/
+RUN pip install /tmp/requirements.txt
+COPY . /tmp/
+　　结果就是cache中的数据将最大可能性的复用，比 COPY . /tmp/ 效果要好的多。
+
+　　因为考虑的image的尺寸问题，现在针对使用ADD 从远程URL获取软件包还有一些争议。建议你还是使用curl或者wget。这样当你安装完毕后，可以再选择删除掉，而不是留在数据层中。如果你想用ADD URL，那么是这样的：
+
+ADD http://example.com/big.tar.xz /usr/src/things/
+RUN tar -xJf /usr/src/things/big.tar.xz -C /usr/src/things
+RUN make -C /usr/src/things all
+　　使用curl和wget，是这样的:
+
+RUN mkdir -p /usr/src/things \
+    && curl -SL http://example.com/big.tar.gz \
+    | tar -xJC /usr/src/things \
+    && make -C /usr/src/things all
+　　对于很多文件和目录，那么就应该使用COPY。
+
+ 
+
+　　ENTRYPOINT　　
+
+　　ENTRYPOINT最好的使用方式是设定image的主命令，允许image通过这个主命令来执行，使用CMD来设定参数。
+
+　　比如使用s3cmd的例子是这样的:
+
+ENTRYPOINT ["s3cmd"]
+CMD ["--help"]
+　　当我们执行 docker run s3cmd或者 docker run s3cmd ls s3://mybucket 时，image就可以执行。
+
+　　这非常有用，当image执行时s3cmd的reference将会同步显示出来。
+
+　　ENTERYPOINT也可以用来允许help 脚本。比如下面是postgres官方image 使用ENTRYPOINT的方式：
+
+复制代码
+#!/bin/bash
+set -e
+
+if [ "$1" = 'postgres' ]; then
+    chown -R postgres "$PGDATA"
+
+    if [ -z "$(ls -A "$PGDATA")" ]; then
+        gosu postgres initdb
+    fi
+
+    exec gosu postgres "$@"
+fi
+
+exec "$@"
+复制代码
+　　将这个脚本COPY到image里面，并且设定为ENTRYPOINT。
+
+COPY ./docker-entrypoint.sh /
+ENTRYPOINT ["/docker-entrypoint.sh"]
+　　当执行docker run postgres 就可以启动image。如果执行docker run postgres postgres --help 将会启动postgres，并且显示reference。
+
+　　最后当然也可以启动一个bash，docker run -it --rm postgres bash
+
+　　
+
+　　VOLUME
+
+　　VOLUME应该被用来导出数据库存储区域，配置文件存储区域或者container内部app创建的目录或者文件。
+
+ 
+
+　　USER
+
+　　如果app运行不需要root权限，使用USER可以变更为普通用户。使用RUN groupadd -r postgres && useradd -r -g postgres postgres可以创建一个普通用户。
+
+　　你应该回避使用sudo来安装软件包。因为在build过程中，TTY是无法使用的。如果在安装过程中需要使用root权限，就使用gosu。
+
+　　最后为了减少不必要的数据层和复杂度，回避切换USER的情况。
+
+　　
+
+　　WORKDIR
+
+　　为了保持执行过程清晰，你应该经常使用绝对路径来设定WORKDIR。同样，你应该使用WORKDIR来替代 RUN cd .. && do-something。 

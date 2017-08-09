@@ -1,0 +1,37 @@
+mongod --port 27017 --dbpath "C:\mongodb3.2.12-51\data"
+
+
+mongod --port 27017 --dbpath "C:\mongodb3.2.12-51\data\rs0" --replSet testrs
+mongod --port 27117 --dbpath "C:\mongodb3.2.12-51\data\rs1" --replSet testrs
+mongod --port 27217 --dbpath "C:\mongodb3.2.12-51\data\rs2" --replSet testrs
+
+
+config_myset={_id: 'testrs', members: [{_id: 0, host: 'localhost:27017'}, {_id: 1, host: 'localhost:27117'}, {_id: 2, host: 'localhost:27217'}]};
+
+rs.initiate(config_myset)
+
+mongodb://localhost,localhost:27117,localhost:27217?slaveOk=true
+
+
+步骤一：启动Shard Server
+mongod --port 27030 --dbpath=C:\mongodb3.2.12-51\data\shard\s0 --logpath=C:\mongodb3.2.12-51\data\shard\s0/s0.log --logappend --fork
+mongod --port 27031 --dbpath=C:\mongodb3.2.12-51\data\shard\s1 --logpath=C:\mongodb3.2.12-51\data\shard\s1/s1.log --logappend --fork
+mongod --port 27032 --dbpath=C:\mongodb3.2.12-51\data\shard\s2 --logpath=C:\mongodb3.2.12-51\data\shard\s2/s2.log --logappend --fork
+
+步骤二： 启动Config Server
+
+mongod --port 27100 --dbpath=C:\mongodb3.2.12-51\data\shard\config --logpath=C:\mongodb3.2.12-51\data\shard\config/config.log --logappend --fork
+
+
+
+步骤三： 启动Route Process
+
+mongos --port 40000 --configdb localhost:27100 --fork --logpath=C:\mongodb3.2.12-51\data\shard/route.log --chunkSize 500
+
+
+
+
+
+docker build -t my/mongo:3.2.12
+
+sudo docker build --tag my/mongo3.2.12 .

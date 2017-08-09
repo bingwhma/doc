@@ -1,0 +1,27 @@
+
+当要以非root用户可以直接运行docker时，需要执行 sudo usermod -aG docker root 命令，然后重新登陆，否则会有如下报错
+
+
+
+
+/etc/default/docker
+
+
+DOCKER_OPTS="$DOCKER_OPTS --registry-mirror http://d42bf315.m.daocloud.io"
+
+
+
+sudo HTTP_PROXY=http://16.153.99.11:8080 docker -d
+
+
+
+然后又在查到另一种方法
+sudo service docker.io stop
+sudo HTTP_PROXY=http://proxy:port docker -d
+sudo docker pull dl.dockerpool.com:5000/ubuntu:14.04
+
+
+
+sudo service docker stop
+
+sudo HTTP_PROXY=http://proxy.jpn.hp.com:8080 docker -d

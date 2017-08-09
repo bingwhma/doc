@@ -1,0 +1,115 @@
+Rancher入门教程(1): 
+
+运行rancher
+
+命令：docker run -d --restart=always -p 8080:8080 rancher/server
+1
+登陆Rancher
+
+URL	http://192.168.32.32:8080
+请使用自己的IP
+添加Environments
+
+选择default下的manage environments
+这里写图片描述
+
+Environment在Rancher中被定义为主要用于容器编排和管理的环境，比如Dev或者TEST或者PROD环境等等。目前Rancher支持如下四种：Cattle/Kubernetes/Mesos/Swarm, Cattle是Rancher自己内置的缺省的编排环境，缺省的Default的即为Cattle类型的。
+这里写图片描述
+
+Add Environments
+
+添加Kubernetes类型
+
+选中 Add Environment 
+选中Kubernetes
+这里写图片描述
+
+添加Mesos类型
+
+这里写图片描述
+
+添加Swarm类型
+
+这里写图片描述
+
+添加Cattle类型
+
+这里写图片描述
+
+Environments确认
+
+添加后连同Default的Environment，现在有了五个Environments，我们会在接下来教程中学习如何使用Rancher的这几种类型的Environments。
+这里写图片描述
+
+
+
+ancher是一个用于部署和管理生产环境的容器的开源平台,它与Kubernetes/Mesos/Docker Swarm进行集成 
+使得在任何硬件环境上容器化应用变得触手可及.在这个系列的教程中我们将会学习如何使用rancher, 
+本文主要用于介绍如何在Rancher的Cattle环境中添加Host.
+选中Cattle
+
+在Environments中，上篇文章我们创建了五个Environment，Cattle其实和Rancher的Default是一致的，我们选中所创建的Cattle，因为这个Cattle的环境中现在空空如也，所以我们至少需要添加一个host才能使之能够工作。
+这里写图片描述
+
+设置Rancher API
+
+在添加Host之前，首先需要设定Rancher API， 一般仅仅需要Save即可
+这里写图片描述
+
+Add host
+
+Rancher API设定好了之后，就可以添加host了
+这里写图片描述
+
+rancher支持VM或者虚拟机以及Cloud的云主机，从Azure到Amazon的EC2都支持，如果上述没有你所需要的机器类型，点击Manage available machine drivers，可以看到Rancher所支持的Machine Drivers的类型
+这里写图片描述
+
+从阿里云到softlayer，几乎支持市面上流行的任意一种
+
+添加本机为自己的一个host，在终端执行步骤5中copy出来的命令
+docker run -d --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/rancher:/var/lib/rancher rancher/agent:v1.0.2 http://192.168.32.32:8080/v1/scripts/0D570C905A7231C08D12:1474534800000:hL1wNdjQlHDTxqWWa4U9MlVXo
+1
+因为本地没有rancher/agent:v1.0.2镜像，所以从dockerhub上下载下来之后运行。
+[root@liumiaocn ~]# docker run -d --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/rancher:/var/lib/rancher rancher/agent:v1.0.2 http://192.168.32.32:8080/v1/scripts/0D570C905A7231C08D12:1474534800000:hL1wNdjQlHDTxqWWa4U9MlVXo
+Unable to find image 'rancher/agent:v1.0.2' locally
+v1.0.2: Pulling from rancher/agent
+5a132a7e7af1: Already exists
+fd2731e4c50c: Already exists
+28a2f68d1120: Already exists
+a3ed95caeb02: Already exists
+7fa4fac65171: Pull complete
+33de63de5fdb: Pull complete
+d00b3b942272: Pull complete
+Digest: sha256:b0b532d1e891534779d0eb1a01a5717ebfff9ac024db4412ead87d834ba92544
+Status: Downloaded newer image for rancher/agent:v1.0.2
+e40a77092af22a6f20d814a2be87033a6457a123730df005a2cf69c8a688e111
+[root@liumiaocn ~]#
+1
+确认host的添加
+
+选择Infrastructure下的Hosts
+这里写图片描述
+
+点击host名称liumiaocn，察看该host的详细信息
+这里写图片描述
+
+
+Rancher是一个用于部署和管理生产环境的容器的开源平台,它与Kubernetes/Mesos/Docker Swarm进行集成 
+使得在任何硬件环境上容器化应用变得触手可及.在这个系列的教程中我们将会学习如何使用rancher, 
+本文主要用于介绍如何在添加了Host的Cattle环境中运行certified catalog
+点击CATALOG
+
+这里写图片描述
+
+Rancher提供了一些（目前76个）常见的软件称为Catalog放到Rancher的平台上，区别于普通的dockerhub上简单的镜像，Racher强调这些是Certified的，安全可靠便捷有效。仅仅需要简单的click几下，那些复杂的Stack比如ELK/Zookeeper等就会轻松的部署到Rancher平台上。
+
+部署Wekan Catalog
+
+这里写图片描述
+
+这里写图片描述
+
+launch之后会自动在stack中添加一个wekan的stack，因为下载时间较长，建议提前将mquandalle/wekan和wekan给pull下来。
+这里写图片描述
+
+可以看到这个wekan的stack由2个container构成，db使用的mongo的镜像，wekan也是使用link的方式与mongo进行连接的。在Infrastructure的container中也可以看到目前container的运行状况，这两个通过catalog方式launch的container也在正常运行中。
