@@ -1,0 +1,135 @@
+Ansible特点
+
+基于python语言开发
+不需要安装客户端，通过sshd通信
+基于模块工作，模块支持多种语言开发
+支持编写yaml格式的playbook，配置文件缩进2行
+支持sudo
+提供UI，流量器图形化 www.ansible.com/tower
+开源UI https://gitub.com/alaxli/ansible_ui
+一、Ansible安装配置
+1. 环境
+    master：172.16.115.157
+    agent：172.16.115.202
+
+2. 服务端安装ansible，客户端无需安装，关闭selinux
+    setenforce 0
+    yum install -y epel-release
+    yum install -y ansible
+    yum install -y openssl-clients
+
+3. 服务端生成密钥对，目录/root/.ssh/
+    ssh-keygen -t rsa   //无需设置单独密码，生成公钥和秘钥id_rsa  id_rsa.pub
+
+4. 将服务端公钥内容放到客户机和本机认证文件中，授600权限
+    scp /root/.ssh/id-rsa.pub   ip:/root/.ssh/authorized_keys
+    cat /root/.ssh/id-rsa.pub >>/root/.ssh/authorized_keys  // ssh 127.0.0.1
+    chmod 600 /root/.ssh/authorized_keys
+
+5. 修改ansible配置文件/etc/ansible/hosts，添加组以及组内IP
+
+    [testhost]              #自定义主机组名字
+    172.16.115.157     #组内机器ip或者机器域名（需先配置好/etc/hosts）
+    127.0.0.1
+
+二、命令模块使用
+
+1. Ansible文档使用
+    ansible-doc -l        # 列出所有模块
+    ansible-doc cron   # 查看指定模块文档
+2. ping命令模块
+    ansible testhost -m ping  #测试机器是否在线
+3. command命令模块
+    ansible testhost -m command -a 'w'              #批量执行命令；-m 后面跟模块名；-a 跟命令
+    ansible 172.16.115.202 -m command -a 'w'   #单独执行命令
+4. shell命令模块
+    说明：shell包含command，并且支持管道和远程执行脚本
+    ansible testhost -m -a 'w'
+    注：可能用到的扩展包：yum install -y libselinux-python  
+5. copy命令模块-拷贝目录和文件
+    说明：可同时指定用户属主和权限，源目录拷贝到目标目录下面去，如果目标目录不存在，则会自动创建
+    ansible master.huangzp.com -m copy -a "src=/etc/ansible dest=/tmp/ansibletest owner=root group=root mode=0755"
+    ansible master.huangzp.com -m copy -a "src=/etc/passwd dest=/tmp/1.txt"
+6. cron命令模块-添加和删除计任务
+    说明：name计划名称，job计划动作
+    ansible testhost -m -a "name='test_cron' job='/bin/touch /tmp/ansible_test02.txt day='1-30' weekday='4'"
+    ansible testhost -m cron -a "name='test_cron' state='absent'"
+
+    注：分钟minute  小时hour  日期day  月份month  周weekday
+7. yum命令模块-安装rpm包
+    说明：rpm需写全称（实际，远程执行shell命令更方便），可以填写state=installed
+    ansible testhost -m yum -a "name=iftop"
+    注：双引号中没有单引号
+8. service命令模块-管理rpm服务
+    说明：state状态可以为：启动start、停止stop等；enabled为开机启动
+    ansible testhost -m service -a "name=iftop state=started enabled=yes"
+
+三、ansible playbook 
+     相当于将各命令模块内容写进配置文件中，然后集中执行，类似于shell脚本。例如：实际生产中，需批量管理很多机器，yum安装，管理配置文件、服务等
+1. ansible配置文件格式
+    vim /etc/ansible/test.yml   # 以.yml结尾
+
+--- #固定格式开头
+ - hosts: testhost #目标主机列表，可以是单台主机
+   remote_user: root #指定用什么用户登录远程主机执行操作
+   tasks: 
+   - name: test_playbook #任务描述，会打印出来
+    shell: /bin/touch /tmp/ansible_test03.txt #具体任务
+
+
+2. 执行ansible playbook
+    ansible-playbook test.yml
+
+ Ansible配置及使用
+
+3. 搜集机器上系统相关信息，用到setup模块
+
+    说明：当管理较多不同系统的主机时，可以根据获取到的不同类型执行对应操作，如Ubuntu，使用apt-get
+     ansible testhost -m setup
+
+4. ansible变量-user命令模块
+
+    vim /etc/ansible/create_user.yml
+
+---
+- name: create_user
+  hosts: agent.huangzp.com
+  gather_facts: false #是否启用setup命令模块获取的信息
+  vars:
+   - user: "test" #var指定user为变量，test为变量的值，需引号
+  tasks:
+      - name: create user
+        user: name="{{ user }}" #name为user命令模块的参数，{{ user }}变量表示形式
+
+
+5. file命令模块-ansible循环
+    vim /etc/ansible/loop.yml
+
+---
+- hosts: testhost
+  user: root
+  tasks:
+    - name: change mode for file
+     file: path=/tmp/{{ item }} mode=600 owner=root group=root
+     with_items:
+      - 1.txt
+      - 2.txt
+
+ Ansible配置及使用
+
+6. when命令模块-ansible条件判断
+
+    vim /etc/ansible/when.yml
+
+---
+- hosts: testhost
+  user: root
+  gather_facts: True
+  tasks:
+   - name: use when
+    shell: /bin/touch /tmp/when.txt
+    when: facter_ipaddress == "172.16.115.202"
+
+
+modules_by_category.html
+http://docs.ansible.com/ansible/latest/modules_by_category.html
