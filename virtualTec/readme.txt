@@ -4,4 +4,4 @@ Openstack不会直接控制qemu-kvm，它会用一个叫libvirt的库去间接�
 referrenURL:
   http://blog.csdn.net/zhaihaifei/article/details/51018113
   
-  
+KVM虚拟化笔记  --参考url  http://liqingbiao.blog.51cto.com/3044896/1740702
