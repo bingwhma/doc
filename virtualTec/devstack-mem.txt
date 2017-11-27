@@ -1,0 +1,41 @@
++./stack.sh:main:1440                      set +o xtrace
+
+=========================
+DevStack Component Timing
+ (times are in seconds)  
+=========================
+run_process          109
+test_with_retry        9
+apt-get-update        26
+pip_install          340
+osc                  457
+wait_for_service     115
+dbsync                90
+apt-get               83
+-------------------------
+Unaccounted time     1774
+=========================
+Total runtime        3003
+
+
+
+This is your host IP address: 192.168.0.54
+This is your host IPv6 address: ::1
+Horizon is now available at http://192.168.0.54/dashboard
+Keystone is serving at http://192.168.0.54/identity/
+The default users are: admin and demo
+The password: openstack
+
+WARNING: 
+Using lib/neutron-legacy is deprecated, and it will be removed in the future
+
+
+Services are running under systemd unit files.
+For more information see: 
+https://docs.openstack.org/devstack/latest/systemd.html
+
+DevStack Version: queens
+Change: b5fb7fd627fe24876a8dd2782fce065cf1957b55 Fix lib_installed_from_git 2017-11-22 10:09:30 +0530
+OS Version: Ubuntu 16.04 xenial
+
+2017-11-24 14:33:51.498 | stack.sh completed in 3003 seconds.

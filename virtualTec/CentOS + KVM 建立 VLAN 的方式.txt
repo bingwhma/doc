@@ -1,0 +1,83 @@
+CentOS + KVM 建立 VLAN 的方式
+假設有三台實體主機 A, B, C
+每台主機的實體網卡 eth1 共同接在相同的 Switch/Hub 上
+A 主機內有 VMA1, VMA2, VMA3
+B 主機內有 VMB1, VMB2
+C 主機內有 VMC1, VMC2, VMC3, VMC4
+打算將 VMA1, VMB1, VMC1 共用 VLAN01(eth1.101), IP 網段為 172.16.101.0/24
+VMA2, VMA3, VMC4 共用 VLAN02(eth1.102), IP 網段為 172.16.102.0/24
+VMB2, VMC2, VMC3 共用 VLAN03(eth1.103), IP 網段為 172.16.103.0/24
+- 確認 Kernel 載入 802.1Q 的狀況
+
+確認 kernel 已經載入 802.1Q 模組
+[root@pdc-e2160 ~]# lsmod | grep 8021q
+8021q                  23575  0
+如果沒出現可透過以下語法將該模組加入
+modprobe 8021q
+- 建立實體主機端 VLAN 介面
+
+為了將來對 VM 方便分割 VLAN 每台實體主機不論該主機內的 VM 有否需要用到特定的 VLAN，一律先建立 VLAN 介面
+建立 VLAN01(eth1.101) ~ VLAN03(eth1.103) 程序
+[root@c2q-q9400 ~]# vconfig add eth1 101
+Added VLAN with VID == 101 to IF -:eth1:-
+[root@c2q-q9400 ~]# vconfig add eth1 102
+Added VLAN with VID == 102 to IF -:eth1:-
+[root@c2q-q9400 ~]# vconfig add eth1 103
+Added VLAN with VID == 103 to IF -:eth1:-
+這樣建立之後, CentOS 就會多出 eth1.101, eth1.102, eth1.103 三個 VLAN 介面
+- 建立實體主機端 VLAN-Bridge 介面
+
+建立 br101(eth1.101) ~ br103(eth1.103) 程序
+[root@c2q-q9400 ~]# brctl addbr br101
+[root@c2q-q9400 ~]# ifconfig eth1.101 up
+[root@c2q-q9400 ~]# brctl addif br101 eth1.101
+[root@c2q-q9400 ~]# brctl show
+bridge name     bridge id               STP enabled     interfaces
+br101           8000.001195f2cf48       no              eth1.101
+[root@c2q-q9400 ~]# brctl addbr br102
+[root@c2q-q9400 ~]# ifconfig eth1.102 up
+[root@c2q-q9400 ~]# brctl addif br102 eth1.102
+[root@c2q-q9400 ~]# brctl show
+bridge name     bridge id               STP enabled     interfaces
+br101           8000.001195f2cf48       no              eth1.101
+br102           8000.001195f2cf48       no              eth1.102
+[root@c2q-q9400 ~]# brctl addbr br103
+[root@c2q-q9400 ~]# ifconfig eth1.103 up
+[root@c2q-q9400 ~]# brctl addif br103 eth1.103
+[root@c2q-q9400 ~]# brctl show
+bridge name     bridge id               STP enabled     interfaces
+br101           8000.001195f2cf48       no              eth1.101
+br102           8000.001195f2cf48       no              eth1.102
+br103           8000.001195f2cf48       no              eth1.103
+安排每台主機 br101~br103 IP 來驗證是否可互通
+ifconfig br101 172.16.101.1 netmask 255.255.255.0 up
+ifconfig br102 172.16.102.1 netmask 255.255.255.0 up
+ifconfig br103 172.16.103.1 netmask 255.255.255.0 up
+Server	br101	br102	br103
+A	172.16.101.1	172.16.102.1	172.16.103.1
+B	172.16.101.2	172.16.102.2	172.16.103.2
+C	172.16.101.3	172.16.102.3	172.16.103.3
+- 編輯開機後自動建立參數檔
+
+Bridge 的部份
+vi /etc/sysconfig/network-scripts/ifcfg-br101
+DEVICE=br101
+TYPE=Bridge
+BOOTPROTO=none
+IPADDR=172.16.101.1
+NETMASK=255.255.255.0
+ONBOOT=yes
+DELAY=0
+br102, br103 也必須依照這樣去編輯
+Ethernet 的部份
+vi /etc/sysconfig/network-scripts/ifcfg-eth1.101
+DEVICE=eth1.101
+VLAN=yes
+ONBOOT=yes
+TYPE=Ethernet
+BRIDGE=br101
+eth1.102, eth1.103 也必須依照這樣去編輯
+參考網址
+
+http://puremonkey2010.blogspot.com/2011/11/linux-vconfig-vlan.html
+http://henroo.wordpress.com/2011/03/25/how-to-add-vlan-network-to-kvm-guest/

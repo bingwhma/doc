@@ -1,0 +1,168 @@
+
+
+apt-get install qemu-kvm qemu virt-manager virt-viewer libvirt-bin bridge-utils
+
+virsh list
+
+
+
+root@kvmstudy:/var/lib/libvirt# pwd
+/var/lib/libvirt
+
+wget http://download.cirros-cloud.net/0.3.5/cirros-0.3.5-x86_64-disk.img
+
+
+
+virt-install使用示例2：用virt-install安装已经存在的镜像导出xml文件通过virsh安装系统
+virt-install -n "kvm1" -r 256 --vcpus=1 --disk path=/var/lib/libvirt/cirros-0.3.5-x86_64-disk.img --network bridge=br0 --import
+
+
+=================使用brctl工具进行网络桥接 临时重启后配置失效====================
+http://blog.csdn.net/wangwenwen/article/details/7479678
+brctl 命令详细分析
+
+增加桥接过程
+ brctl addbr br0       #创建一个名称为"br0"的网卡
+ifconfig eth0 0 up     #将需要桥接的网卡IP清空
+brctl addif br0 enp0s3                       #在"br0"上添加"enp0s3"；
+ifconfig  br0 192.168.16.107/24 up        #给"br0"配置IP；
+
+ brctl stp br0 on	#开启stp服务
+
+
+
+
+
+=====================修改interfaces文件永久生效===================================
+创建网桥设备
+sudo brctl addbr br0
+其中br0是网桥名,应该可以随便起.
+
+查看网卡名
+sudo ls /proc/sys/net/ipv4/conf
+
+
+配置之前,如果网卡正在工作,最好使用
+sudo ifdown enp0s3
+
+sudo ifdown br0
+
+
+配置网桥,打开接口文件
+sudo vim /etc/network/interfaces
+1
+使用#号注释或删掉上述四个网口的原有配置,或者将这个文件先备份一下.
+输入配置代码(在巡回地址后面输入,不要输入在文件开始处)
+
+auto enp0s3
+
+auto br0
+iface br0 inet dhcp
+bridge_ports enp0s3
+bridge_stp off
+bridge_fd 0
+
+
+sudo ifdown br1
+sudo ifup br1
+
+
+
+什么是网桥
+网桥是一种在链路层实现中继，对帧进行转发的技术，根据MAC分区块，可隔离碰撞，将网络的多个网段在数据链路层连接起来的网络设备。
+Linux 网桥配置命令：brctl
+在Linux中配置网络一般使用 brctl 命令，使用此命令首先要安装：bridge-utils软件包。
+[inbi@debian~]#apt-get install bridge-utils
+[inbi@debian~]#modprobe bridge
+[inbi@debian~]#echo "1">/proc/sys/net/ipv4/ip_forward
+#安装bridge-utils软件包，并加载bridge模块和开启内核转发。
+[inbi@debian~]#brctl
+#直接输入brctl命令将显示帮助信息！
+Usage: brctl [commands]
+commands:
+addbr
+<bridge>
+add bridge
+delbr
+<bridge>
+delete bridge
+addif
+<bridge> <device>
+add interface to bridge
+delif
+<bridge> <device>
+delete interface from bridge
+setageing
+<bridge> <time>
+set ageing time
+setbridgeprio
+<bridge> <prio>
+set bridge priority
+setfd
+<bridge> <time>
+set bridge forward delay
+sethello
+<bridge> <time>
+set hello time
+setmaxage
+<bridge> <time>
+set max message age
+setpathcost
+<bridge> <port> <cost>
+set path cost
+setportprio
+<bridge> <port> <prio>
+set port priority
+show
+ 
+show a list of bridges
+showmacs
+<bridge>
+show a list of mac addrs
+showstp
+<bridge>
+show bridge stp info
+stp
+<bridge> {on|off}
+turn stp on/off
+ 
+增加网桥
+ 
+[inbi@debian~]#brctl addbr br0
+#增加一个网桥
+[inbi@debian~]#ifconfig eth0 0.0.0.0 promisc
+[inbi@debian~]#ifconfig eth1 0.0.0.0 promisc
+[inbi@debian~]#brctl addif br0 eth0 eth1
+#将两块已有的网卡添加到网桥，此时这两个网卡工作于混杂模式，所以不需要IP了，因为网桥是工作在链路层的。
+[inbi@debian~]#brctl show
+#查看已有网桥
+ 
+你也可以为 br0 设置一个IP，已访问这台机器。
+[inbi@debian~]#ifconfig br0 10.10.1.1 netmask 255.255.0.0 up
+删除网桥
+[inbi@debian~]#brctl delif br0 eth0 eth1
+#增加网桥中的接口
+[inbi@debian~]#brctl delbr br0
+#删除网桥
+关闭生成树
+ 
+[inbi@debian~]#brctl stp br0 off
+#关闭生成树协议，减少数据包污染，因为我这里只有一个路由器哦！
+配置桥开机激活
+ 
+[inbi@debian~]#echo "modprobe bridge">>/etc/rc.local
+#开机加载 bridge 模块，或者echo "bridge">>/etc/modules
+[inbi@debian~]#cp /etc/network/interfaces /etc/network/interfaces.default
+#备份下，方便以后使用啊！
+[inbi@debian~]#vim /etc/network/interfaces
+auto lo eth0 eth1 br0
+iface lo inet loopback
+iface br0 inet static
+    address 10.10.10.1
+    netmask 255.255.0.0
+    gateway 10.10.10.254
+    pre-up ip link set eth0 promisc on
+    pre-up ip link set eth1 promisc on
+    pre-up echo "1">/proc/sys/net/ipv4/ip_forward
+    bridge_ports eth0 eth1
+#配置eth0 eth1 br0开机启动，eth0，eth1未设置IP信息，在启动br0网卡时，开启了eth0，eth1的混杂模式，并桥接了它们。
